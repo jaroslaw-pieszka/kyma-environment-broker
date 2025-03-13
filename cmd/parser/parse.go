@@ -31,14 +31,11 @@ func NewParseCmd() *cobra.Command {
 	cobraCmd := &cobra.Command{
 		Use:     "parse",
 		Aliases: []string{"p"},
-		Short:   "Parses a HAP rule entry validating its format",
-		Long:    "Parses a HAP rule entry validating its format, by default using simple string splitting. Documentation can be found ... .",
+		Short:   "Parses a HAP rule entry validating its format.",
+		Long:    "Parses a HAP rule entry validating its format.",
 		Example: `
-	# Parse a rule entry using simple string splitting
+	# Parse multiple rules from command line arguments
 	hap parse -e 'azure(PR=westeurope), aws->EU' 
-	
-	# Parse multiple rules from a file using simple string splitting
-	hap parse -e 'azure(PR=westeurope); aws->EU' 
 
 	# Parse multiple rules from a file:
 	# --- rules.yaml
@@ -48,16 +45,9 @@ func NewParseCmd() *cobra.Command {
 	# ---
 	hap parse -f rules.yaml
 
-	# Sort rule entries by their priority
-	hap parse -p -e 'azure(PR=westeurope), aws->EU'	
-	
-	# Disable duplicated rule entries
-	hap parse -u -e 'azure(PR=westeurope), azure(PR=westeurope)'
-
-	# Check what rule will be matched and triggered against the provided test data
-	hap parse -p -u  -f ./correct-rules.yaml -m '{"plan": "aws", "platformRegion": "cf-eu11", "hyperscalerRegion": "westeurope"}'
+	# Check which rule will be matched and triggered against the provided provisioning data
+	hap parse  -f ./correct-rules.yaml -m '{"plan": "aws", "platformRegion": "cf-eu11", "hyperscalerRegion": "westeurope"}'
 		`,
-
 		RunE: func(_ *cobra.Command, args []string) error {
 			cmd.Run()
 			return nil
@@ -68,9 +58,6 @@ func NewParseCmd() *cobra.Command {
 	cobraCmd.Flags().StringVarP(&cmd.rule, "entry", "e", "", "A rule to validate where each rule entry is separated by comma.")
 	cobraCmd.Flags().StringVarP(&cmd.match, "match", "m", "", "Check what rule will be matched and triggered against the provided test data. Only valid entries are taking into account when matching. Data is passed in json format, example: '{\"plan\": \"aws\", \"platformRegion\": \"cf-eu11\"}'.")
 	cobraCmd.Flags().StringVarP(&cmd.ruleFilePath, "file", "f", "", "Read rules from a file pointed to by parameter value. The file must contain a valid yaml list, where each rule entry starts with '-' and is placed in its own line.")
-	cobraCmd.Flags().BoolVarP(&cmd.sort, "priority", "p", false, "Sort rule entries by their priority, in descending priority order.")
-	cobraCmd.Flags().BoolVarP(&cmd.unique, "unique", "u", false, "Display only non duplicated rules. Error entries are not considered for uniqueness.")
-	cobraCmd.Flags().BoolVarP(&cmd.signature, "signature", "s", false, "Mark rules with the mirrored signatures as duplicated. For example aws(PR=*, HR=westeurope) and aws(PR=westeurope, HR=*) are considered duplicated because of having mirrored signatures.")
 	cobraCmd.Flags().BoolVarP(&cmd.noColor, "no-color", "n", false, "Disable use color characters when generating output.")
 	cobraCmd.MarkFlagsOneRequired("entry", "file")
 
@@ -89,10 +76,6 @@ func (cmd *ParseCommand) Run() {
 		printer = rules.NewNoColor(cmd.cobraCmd.Printf)
 	}
 
-	if cmd.match != "" && (!cmd.sort || !cmd.unique) {
-		cmd.cobraCmd.Printf("\tMatching is only supported when both priority and uniqueness flags are specified.\n")
-	}
-
 	// create enabled plans
 	enabledPlans := broker.EnablePlans{}
 	for _, plan := range broker.PlanNamesMapping {
@@ -103,9 +86,9 @@ func (cmd *ParseCommand) Run() {
 	var err error
 	if cmd.ruleFilePath != "" {
 		cmd.cobraCmd.Printf("Parsing rules from file: %s\n", cmd.ruleFilePath)
-		rulesService, err = rules.NewRulesServiceFromFile(cmd.ruleFilePath, &enabledPlans, cmd.sort, cmd.unique, cmd.signature)
+		rulesService, err = rules.NewRulesServiceFromFile(cmd.ruleFilePath, &enabledPlans, true, true, true)
 	} else {
-		rulesService, err = rules.NewRulesServiceFromString(cmd.rule, &enabledPlans, cmd.sort, cmd.unique, cmd.signature)
+		rulesService, err = rules.NewRulesServiceFromString(cmd.rule, &enabledPlans, true, true, true)
 	}
 
 	if err != nil {
